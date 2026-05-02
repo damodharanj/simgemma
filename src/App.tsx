@@ -13,7 +13,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Terminal } from '@/components/Terminal'
 import { SettingsModal } from '@/components/SettingsModal'
 import { AgentTools } from '@/lib/bash/agent-tools'
-import { SYSTEM_PROMPT } from '@/lib/bash/system-prompt'
+import { getSystemPrompt } from '@/lib/bash/system-prompt'
 import { McpClientManager } from '@/lib/bash/mcp-client'
 import { loadConfig } from '@/lib/agent-config'
 import { BashSystem } from '@/lib/bash/bash-system'
@@ -310,6 +310,32 @@ export default function App() {
 
   const clearImage = () => setSelectedImage(null);
 
+  const syncArtifactToSelectedApp = async () => {
+    if (!selectedApp) return;
+    try {
+      const bash = BashSystem.getInstance();
+      const appsDir = '/home/user/apps';
+      const result = await bash.execute(`ls ${appsDir}/`);
+      if (result.exitCode !== 0 || !result.stdout.trim()) return;
+      
+      const appFolders = result.stdout.trim().split('\n').filter(Boolean);
+      
+      for (const folder of appFolders) {
+        if (folder === selectedApp || folder === 'sessions') continue;
+        
+        const indexPath = `${appsDir}/${folder}/index.html`;
+        const exists = await bash.fs.exists(indexPath);
+        if (exists) {
+          const html = await bash.fs.readFile(indexPath, 'utf-8');
+          await bash.fs.writeFile(`${appsDir}/${selectedApp}/index.html`, html);
+        }
+      }
+      
+      await loadArtifactFromFs(selectedApp);
+    } catch {
+    }
+  };
+
   const resetChat = async () => {
     setMessages([]);
     setInput('');
@@ -395,7 +421,6 @@ export default function App() {
 
     try {
       const bash = BashSystem.getInstance();
-      await bash.fs.writeFile(`/home/user/apps/${appName}/sessions/${sessionId}.json`, JSON.stringify([]));
       await bash.fs.writeFile(`/home/user/apps/${appName}/sessions/index.json`, JSON.stringify(updatedSessions));
     } catch (e) {
       console.error('Failed to create session:', e);
@@ -476,7 +501,7 @@ export default function App() {
       const apiMessages = allMessages.filter(m => !(m.role === 'assistant' && m.thinking));
 
       const history = [
-        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'system', content: getSystemPrompt(selectedApp) },
         ...apiMessages
       ];
 
@@ -577,6 +602,7 @@ export default function App() {
         if (htmlArtifactContent) {
           setHtmlArtifact(htmlArtifactContent);
         }
+        await syncArtifactToSelectedApp();
         setStatus('ready');
         if (requestId) {
           window.dispatchEvent(new CustomEvent(`agent-done-${requestId}`));
@@ -597,7 +623,9 @@ export default function App() {
     setStatus('generating');
 
     // Add thinking message
-    setMessages(prev => [...prev, { role: 'assistant', content: '', thinking: true }]);
+    const thinkingMsg: Message = { role: 'assistant', content: '', thinking: true };
+    const updatedHistory = [...extendedHistory, thinkingMsg];
+    setMessages(updatedHistory);
 
     try {
       const allTools = getAllTools();
@@ -606,7 +634,7 @@ export default function App() {
       const filteredHistory = extendedHistory.filter(m => !(m.role === 'assistant' && m.thinking));
 
       const history = [
-        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'system', content: getSystemPrompt(selectedApp) },
         ...filteredHistory
       ];
 
@@ -643,20 +671,17 @@ export default function App() {
         const toolCall = assistantMessage.tool_calls[0];
         const toolCallId = toolCall.id || crypto.randomUUID();
 
+        const assistantMsg: Message = {
+          role: 'assistant',
+          content: assistantMessage.content || '',
+          tool_calls: assistantMessage.tool_calls,
+          thinking: false
+        };
+        const toolMsg: Message = { role: 'tool', tool_call_id: toolCallId, content: '' };
+
         // Update thinking message with tool_calls
-        setMessages(prev => {
-          const updated = [...prev];
-          const last = updated[updated.length - 1];
-          if (last && last.role === 'assistant') {
-            updated[updated.length - 1] = {
-              ...last,
-              content: assistantMessage.content || '',
-              tool_calls: assistantMessage.tool_calls,
-              thinking: false
-            };
-          }
-          return updated;
-        });
+        const newHistory = [...extendedHistory, assistantMsg, toolMsg];
+        setMessages(newHistory);
 
         if (requestId) {
           window.dispatchEvent(new CustomEvent('terminal-write', { detail: `\r\n\x1b[1;33mExecuting: ${toolCall.function.name}...\x1b[0m\r\n` }));
@@ -673,7 +698,7 @@ export default function App() {
         }
 
         const resultPayload = JSON.stringify(result);
-        setMessages(prev => [...prev, { role: 'tool', tool_call_id: toolCallId, content: resultPayload }]);
+        toolMsg.content = resultPayload;
 
         if (requestId) {
           window.dispatchEvent(new CustomEvent('terminal-write', { detail: `\x1b[1;32mTool Finished\x1b[0m\r\n` }));
@@ -681,30 +706,25 @@ export default function App() {
 
         setTimeout(() => continueGeneratingApi([
           ...extendedHistory,
-          { role: 'assistant', content: assistantMessage.content || '', tool_calls: assistantMessage.tool_calls },
+          assistantMsg,
           { role: 'tool', tool_call_id: toolCallId, content: resultPayload }
         ], requestId), 500);
       } else {
         const assistantResponse = assistantMessage?.content || '';
 
-        // Update thinking message with response
-        setMessages(prev => {
-          const updated = [...prev];
-          const last = updated[updated.length - 1];
-          if (last && last.role === 'assistant') {
-            updated[updated.length - 1] = {
-              ...last,
-              content: assistantResponse,
-              thinking: false
-            };
-          }
-          return updated;
-        });
+        const assistantMsg: Message = {
+          role: 'assistant',
+          content: assistantResponse,
+          thinking: false
+        };
+        const newHistory = [...extendedHistory, assistantMsg];
+        setMessages(newHistory);
 
         const htmlArtifactContent = AgentTools.parseHtmlArtifact(assistantResponse);
         if (htmlArtifactContent) {
           setHtmlArtifact(htmlArtifactContent);
         }
+        await syncArtifactToSelectedApp();
         setStatus('ready');
         if (requestId) {
           window.dispatchEvent(new CustomEvent(`agent-done-${requestId}`));
@@ -754,7 +774,7 @@ export default function App() {
       const allTools = getAllTools();
 
       const history: any[] = [
-        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'system', content: getSystemPrompt(selectedApp) },
         ...messages,
         userMsg
       ].map((m: any) => ({
@@ -898,6 +918,7 @@ export default function App() {
         if (htmlArtifactContent) {
           setHtmlArtifact(htmlArtifactContent);
         }
+        await syncArtifactToSelectedApp();
         setStatus('ready');
         if (requestId) {
           window.dispatchEvent(new CustomEvent(`agent-done-${requestId}`));
@@ -921,7 +942,7 @@ export default function App() {
       const allTools = getAllTools();
 
       const history = [
-        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'system', content: getSystemPrompt(selectedApp) },
         ...extendedHistory
       ].map((m: any) => {
         const base: any = {
@@ -945,7 +966,10 @@ export default function App() {
         return_dict: true,
       });
 
-      setMessages(prev => [...prev, { role: 'assistant', content: '', thinking: true }]);
+      // Add thinking message to history
+      const thinkingMsg: Message = { role: 'assistant', content: '', thinking: true };
+      const historyWithThinking = [...extendedHistory, thinkingMsg];
+      setMessages(historyWithThinking);
 
       let generatedText = '';
       const streamer = new TextStreamer(processorRef.current.tokenizer, {
@@ -986,22 +1010,19 @@ export default function App() {
         const toolCallId = crypto.randomUUID();
         setStatus('generating');
 
-        // Update assistant message with tool_calls
-        setMessages(prev => {
-          const updated = [...prev];
-          const last = updated[updated.length - 1];
-          if (last && last.role === 'assistant') {
-            updated[updated.length - 1] = {
-              ...last,
-              tool_calls: [{
-                id: toolCallId,
-                type: 'function',
-                function: { name: toolCall.name, arguments: JSON.stringify(toolCall.arguments) }
-              }]
-            };
-          }
-          return updated;
-        });
+        const assistantMsg: Message = {
+          role: 'assistant',
+          content: assistantResponse,
+          tool_calls: [{
+            id: toolCallId,
+            type: 'function',
+            function: { name: toolCall.name, arguments: JSON.stringify(toolCall.arguments) }
+          }]
+        };
+
+        // Add assistant message with tool_calls to history
+        const historyWithAssistant = [...extendedHistory, assistantMsg];
+        setMessages(historyWithAssistant);
 
         if (requestId) {
           window.dispatchEvent(new CustomEvent('terminal-write', { detail: `\r\n\x1b[1;33mExecuting: ${toolCall.name}...\x1b[0m\r\n` }));
@@ -1029,36 +1050,30 @@ export default function App() {
           window.dispatchEvent(new CustomEvent('terminal-write', { detail: `\x1b[1;32mTool Finished\x1b[0m\r\n` }));
         }
 
-        setMessages(prev => [...prev, { role: 'tool', tool_call_id: toolCallId, content: resultPayload }]);
+        // Add tool result to history
+        const toolMsg: Message = { role: 'tool', tool_call_id: toolCallId, content: resultPayload };
+        const finalHistory = [...historyWithAssistant, toolMsg];
+        setMessages(finalHistory);
 
         setTimeout(() => continueGenerating([
           ...extendedHistory,
-          {
-            role: 'assistant',
-            content: assistantResponse,
-            tool_calls: [{
-              id: toolCallId,
-              type: 'function',
-              function: { name: toolCall.name, arguments: JSON.stringify(toolCall.arguments) }
-            }]
-          },
-          { role: 'tool', tool_call_id: toolCallId, content: resultPayload }
+          assistantMsg,
+          toolMsg
         ], requestId), 500);
       } else {
         // No tool call - final response
-        setMessages(prev => {
-          const updated = [...prev];
-          const last = updated[updated.length - 1];
-          if (last && last.role === 'assistant') {
-            updated[updated.length - 1] = { ...last, content: assistantResponse };
-          }
-          return updated;
-        });
+        const assistantMsg: Message = {
+          role: 'assistant',
+          content: assistantResponse
+        };
+        const finalHistory = [...extendedHistory, assistantMsg];
+        setMessages(finalHistory);
 
         const htmlArtifactContent = AgentTools.parseHtmlArtifact(assistantResponse);
         if (htmlArtifactContent) {
           setHtmlArtifact(htmlArtifactContent);
         }
+        await syncArtifactToSelectedApp();
         setStatus('ready');
         if (requestId) {
           window.dispatchEvent(new CustomEvent(`agent-done-${requestId}`));

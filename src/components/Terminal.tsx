@@ -557,7 +557,7 @@ export const Terminal: React.FC<TerminalProps> = ({ onClose }) => {
     }
 
     try {
-      const result = await bashSystem.bash.exec(cmd, { cwd });
+      const result = await bashSystem.execute(cmd);
       
       if (result.stdout) {
         term.write(result.stdout.replace(/\n/g, '\r\n'));
@@ -566,9 +566,7 @@ export const Terminal: React.FC<TerminalProps> = ({ onClose }) => {
         term.write('\x1b[31m' + result.stderr.replace(/\n/g, '\r\n') + '\x1b[0m');
       }
 
-      if (result.env?.PWD && result.env.PWD !== cwd) {
-        setCwd(result.env.PWD);
-      }
+      setCwd(bashSystem.getCwd());
 
       const fsModifyingCommands = /^(mkdir|rmdir|rm|cp|mv|touch|cat\s+.*>\s*|echo\s+.*>\s*|tee|chmod|chown)/;
       if (fsModifyingCommands.test(cmd.trim())) {

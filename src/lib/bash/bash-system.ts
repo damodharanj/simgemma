@@ -5,16 +5,19 @@ import { catCommand } from './cat-command';
 import { piCommand } from './pi-command';
 import { mcpCommand } from './mcp-command';
 import { appsListCommand } from './apps-list-command';
+
 export class BashSystem {
   private static instance: BashSystem;
   public bash: Bash;
   public fs: LightningFSAdapter;
+  private currentCwd: string;
 
   private constructor() {
+    this.currentCwd = '/home/user';
     this.fs = new LightningFSAdapter('gemma-agent-fs');
     this.bash = new Bash({
       fs: this.fs,
-      cwd: '/home/user',
+      cwd: this.currentCwd,
       customCommands: [gitCommand, catCommand, piCommand, mcpCommand, appsListCommand],
       env: {
         USER: 'gemma',
@@ -23,7 +26,6 @@ export class BashSystem {
       }
     });
 
-    // Ensure home directory exists
     this.init();
   }
 
@@ -50,7 +52,17 @@ export class BashSystem {
     return BashSystem.instance;
   }
 
+  public getCwd(): string {
+    return this.currentCwd;
+  }
+
   async execute(command: string) {
-    return await this.bash.exec(command);
+    const result = await this.bash.exec(command, { cwd: this.currentCwd });
+
+    if (result.env?.PWD) {
+      this.currentCwd = result.env.PWD;
+    }
+
+    return result;
   }
 }

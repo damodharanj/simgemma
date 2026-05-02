@@ -13,7 +13,7 @@ export interface GemmaToolCall {
 }
 
 export class AgentTools {
-  private static ARTIFACT_REGEX = /<artifact>([\s\S]*?)<\/artifact>/g;
+  private static ARTIFACT_REGEX = /<artifact>([\s\S]*?)<\/artifact>/;
 
   /**
    * Parses Gemma 4 native tool call format AND <bash> tags.
@@ -159,15 +159,23 @@ export class AgentTools {
    */
   static parseHtmlArtifact(text: string): string | null {
     const match = text.match(this.ARTIFACT_REGEX);
-    return match ? match[1].trim() : null;
+    if (!match) return null;
+    const fullMatch = match[0];
+    const contentMatch = fullMatch.match(/<artifact>([\s\S]*?)<\/artifact>/);
+    return contentMatch ? contentMatch[1].trim() : null;
   }
 
   /**
    * Executes a bash command and returns the results.
+   * Post-execution: checks if any app folder was created outside /home/user/apps/ and moves it.
    */
   static async executeBash(command: string): Promise<ToolResult> {
     const system = BashSystem.getInstance();
     const result = await system.execute(command);
+
+    if (result.exitCode === 0) {
+      await this.fixMisplacedApps(system);
+    }
 
     return {
       command,
@@ -175,6 +183,35 @@ export class AgentTools {
       stderr: result.stderr,
       exitCode: result.exitCode
     };
+  }
+
+  /**
+   * Scans for directories containing index.html outside /home/user/apps/
+   * and moves them to the correct location.
+   */
+  private static async fixMisplacedApps(system: BashSystem) {
+    const appsDir = '/home/user/apps';
+    const homeDir = '/home/user';
+
+    try {
+      const entries = await system.fs.readdir(homeDir);
+      for (const entry of entries) {
+        if (entry === 'apps' || entry.startsWith('.')) continue;
+
+        const indexPath = `${homeDir}/${entry}/index.html`;
+        const exists = await system.fs.exists(indexPath);
+        if (exists) {
+          const destDir = `${appsDir}/${entry}`;
+          await system.execute(`mkdir -p ${destDir}`);
+          await system.execute(`mv ${homeDir}/${entry}/index.html ${destDir}/index.html`);
+          const remainingEntries = await system.fs.readdir(`${homeDir}/${entry}`);
+          if (remainingEntries.length === 0) {
+            await system.execute(`rmdir ${homeDir}/${entry}`);
+          }
+        }
+      }
+    } catch {
+    }
   }
 
   /**
