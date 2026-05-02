@@ -5,6 +5,8 @@ import { catCommand } from './cat-command';
 import { piCommand } from './pi-command';
 import { mcpCommand } from './mcp-command';
 import { appsListCommand } from './apps-list-command';
+import { fsExportCommand } from './fs-export-command';
+import { fsImportCommand } from './fs-import-command';
 
 export class BashSystem {
   private static instance: BashSystem;
@@ -18,7 +20,7 @@ export class BashSystem {
     this.bash = new Bash({
       fs: this.fs,
       cwd: this.currentCwd,
-      customCommands: [gitCommand, catCommand, piCommand, mcpCommand, appsListCommand],
+      customCommands: [gitCommand, catCommand, piCommand, mcpCommand, appsListCommand, fsExportCommand, fsImportCommand],
       env: {
         USER: 'gemma',
         HOME: '/home/user',

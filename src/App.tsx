@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
-import { Send, Image as ImageIcon, Loader2, User, Bot, X, Terminal as TerminalIcon, Settings, RotateCcw, AlertCircle, Layout, Eye, FolderPlus, FolderOpen, Plus, MessageSquare, Trash2 } from 'lucide-react'
+import { Send, Image as ImageIcon, Loader2, User, Bot, X, Terminal as TerminalIcon, Settings, RotateCcw, AlertCircle, Layout, Eye, FolderPlus, FolderOpen, Plus, MessageSquare, Trash2, Download, Upload } from 'lucide-react'
 import { 
   AutoProcessor, 
   Gemma4ForConditionalGeneration, 
@@ -114,6 +114,8 @@ export default function App() {
   const [newAppName, setNewAppName] = useState('');
   const [showCreateApp, setShowCreateApp] = useState(false);
   const [showSessionList, setShowSessionList] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
   
   const modelRef = useRef<any>(null);
   const processorRef = useRef<any>(null);
@@ -185,6 +187,55 @@ export default function App() {
     window.addEventListener('agent-request', handleAgentRequest);
     return () => window.removeEventListener('agent-request', handleAgentRequest);
   }, [status, messages]);
+
+  const handleExportFs = async () => {
+    setIsExporting(true);
+    try {
+      const bash = BashSystem.getInstance();
+      const result = await bash.execute('fs-export');
+      if (result.exitCode === 0) {
+        const blob = new Blob([result.stdout], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `gemma-agent-fs-${new Date().toISOString().slice(0, 10)}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+    } catch (e: any) {
+      console.error('Export failed:', e);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleImportFs = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    input.onchange = async (e: any) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      setIsImporting(true);
+      try {
+        const text = await file.text();
+        const bash = BashSystem.getInstance();
+        const result = await bash.execute(`echo '${text.replace(/'/g, "'\\''")}' | fs-import`);
+        if (result.exitCode === 0) {
+          window.dispatchEvent(new CustomEvent('filesystem-changed'));
+          alert(result.stdout || 'Import completed successfully');
+        } else {
+          alert(`Import failed: ${result.stderr}`);
+        }
+      } catch (e: any) {
+        console.error('Import failed:', e);
+        alert(`Import failed: ${e.message}`);
+      } finally {
+        setIsImporting(false);
+      }
+    };
+    input.click();
+  };
 
   const loadApps = async () => {
     try {
@@ -1211,6 +1262,26 @@ export default function App() {
               title="Settings"
             >
               <Settings className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 rounded-lg text-muted-foreground hover:text-foreground"
+              onClick={handleExportFs}
+              disabled={isExporting}
+              title="Export Filesystem"
+            >
+              {isExporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 rounded-lg text-muted-foreground hover:text-foreground"
+              onClick={handleImportFs}
+              disabled={isImporting}
+              title="Import Filesystem"
+            >
+              {isImporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
             </Button>
           </div>
         </div>
