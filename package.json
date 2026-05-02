@@ -1,0 +1,31 @@
+{
+  "name": "gemma-agent",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "main": "./src/index.ts",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "@huggingface/transformers": "^4.0.1",
+    "@isomorphic-git/lightning-fs": "^4.6.2",
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "isomorphic-git": "^1.37.5",
+    "just-bash": "^2.14.1",
+    "lucide-react": "^1.8.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.2.2",
+    "@types/node": "^24.12.2",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.1",
+    "typescript": "~6.0.2",
+    "vite": "^8.0.4"
+  }
+}
