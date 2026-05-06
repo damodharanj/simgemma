@@ -155,14 +155,16 @@ export class AgentTools {
   }
 
   /**
-   * Scans a string for <artifact>...</artifact> tags and returns all matches.
+   * Scans a string for <artifact>...</artifact> tags and returns the last match.
+   * Returns null if no artifact tags found.
    */
   static parseHtmlArtifact(text: string): string | null {
-    const match = text.match(this.ARTIFACT_REGEX);
-    if (!match) return null;
-    const fullMatch = match[0];
-    const contentMatch = fullMatch.match(/<artifact>([\s\S]*?)<\/artifact>/);
-    return contentMatch ? contentMatch[1].trim() : null;
+    const matches = text.matchAll(/<artifact>([\s\S]*?)<\/artifact>/g);
+    let lastMatch: string | null = null;
+    for (const match of matches) {
+      lastMatch = match[1].trim();
+    }
+    return lastMatch;
   }
 
   /**

@@ -10,7 +10,7 @@ interface TerminalProps {
   onClose: () => void;
 }
 
-const HISTORY_KEY = 'gemma-terminal-history';
+const HISTORY_KEY = 'simgemma-terminal-history';
 const MAX_HISTORY = 1000;
 
 const loadHistory = (): string[] => {
@@ -188,7 +188,7 @@ export const Terminal: React.FC<TerminalProps> = ({ onClose }) => {
     fitAddonRef.current = fitAddon;
 
     term.writeln('\x1b[1;36m╔════════════════════════════════════════════════════════╗\x1b[0m');
-    term.writeln('\x1b[1;36m║\x1b[0m     \x1b[1;32mGemma 4 Browser Terminal v1.0\x1b[0m                       \x1b[1;36m║\x1b[0m');
+    term.writeln('\x1b[1;36m║\x1b[0m     \x1b[1;32mSimGemma Browser Terminal v1.0\x1b[0m                       \x1b[1;36m║\x1b[0m');
     term.writeln('\x1b[1;36m║\x1b[0m     Type \x1b[1;33mhelp\x1b[0m for available commands                     \x1b[1;36m║\x1b[0m');
     term.writeln('\x1b[1;36m║\x1b[0m     \x1b[1;35mCtrl+R\x1b[0m: reverse-search  \x1b[1;35mUp/Down\x1b[0m: history        \x1b[1;36m║\x1b[0m');
     term.writeln('\x1b[1;36m║\x1b[0m     \x1b[1;35mCtrl+L\x1b[0m: clear      \x1b[1;35mCtrl+D\x1b[0m: exit           \x1b[1;36m║\x1b[0m');

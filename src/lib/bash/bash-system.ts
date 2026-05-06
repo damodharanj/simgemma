@@ -16,13 +16,13 @@ export class BashSystem {
 
   private constructor() {
     this.currentCwd = '/home/user';
-    this.fs = new LightningFSAdapter('gemma-agent-fs');
+    this.fs = new LightningFSAdapter('simgemma-fs');
     this.bash = new Bash({
       fs: this.fs,
       cwd: this.currentCwd,
       customCommands: [gitCommand, catCommand, piCommand, mcpCommand, appsListCommand, fsExportCommand, fsImportCommand],
       env: {
-        USER: 'gemma',
+        USER: 'simgemma',
         HOME: '/home/user',
         PATH: '/bin:/usr/bin',
       }
@@ -42,8 +42,44 @@ export class BashSystem {
       if (!(await this.fs.exists('/home/user/apps'))) {
         await this.fs.mkdir('/home/user/apps', { recursive: true });
       }
+
+      // Check if already initialized with default files
+      if (!(await this.fs.exists('/.initialized'))) {
+        await this.initDefaultFiles();
+      }
     } catch (e) {
       console.error('Failed to initialize FS paths', e);
+    }
+  }
+
+  private async initDefaultFiles() {
+    try {
+      console.log('Initializing default files from assets/default.json...');
+      const response = await fetch('/assets/default.json');
+      if (!response.ok) {
+        throw new Error(`Failed to fetch default.json: ${response.statusText}`);
+      }
+      const data = await response.text();
+      
+      const tempPath = '/tmp/default-import.json';
+      if (!(await this.fs.exists('/tmp'))) {
+        await this.fs.mkdir('/tmp', { recursive: true });
+      }
+      
+      await this.fs.writeFile(tempPath, data);
+      const result = await this.execute(`fs-import ${tempPath}`);
+      
+      if (result.exitCode === 0) {
+        await this.fs.writeFile('/.initialized', 'true');
+        console.log('Default files initialized successfully');
+        window.dispatchEvent(new CustomEvent('filesystem-changed'));
+      } else {
+        console.error('Failed to import default files:', result.stderr);
+      }
+      
+      await this.fs.rm(tempPath).catch(() => {});
+    } catch (e) {
+      console.error('Error during default files initialization:', e);
     }
   }
 

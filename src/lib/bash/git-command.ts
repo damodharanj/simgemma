@@ -69,7 +69,7 @@ export const gitCommand = defineCommand('git', async (args, ctx): Promise<{ stdo
           fs,
           dir,
           message,
-          author: { name: 'Gemma Agent', email: 'agent@gemma.local' }
+          author: { name: 'SimGemma', email: 'agent@simgemma.local' }
         });
         return { stdout: `[main ${sha.substring(0, 7)}] ${message}\n`, stderr: '', exitCode: 0 };
       }
@@ -104,7 +104,7 @@ case 'branch': {
           fs,
           http,
           dir,
-          author: { name: 'Gemma Agent', email: 'agent@gemma.local' },
+          author: { name: 'SimGemma', email: 'agent@simgemma.local' },
           remote,
           ref: branch,
         });

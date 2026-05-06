@@ -1,4 +1,4 @@
-# Agent Instructions for Gemma Agent Package
+# SimGemma
 
 ## Project Overview
 
@@ -9,7 +9,7 @@ This is a **browser-based AI agent powered by Google's Gemma 4 model**, running 
 - Web app creation capabilities (HTML/Tailwind/Three.js)
 - Support for both local inference (Gemma 4 E2B ONNX) and OpenAI-compatible API modes
 
-Located at `student_management/packages/gemma-agent/`, it is a standalone package within the school management system monorepo.
+SimGemma is a standalone package that leverages WebGPU to run high-performance LLMs directly in the user's browser, providing a low-latency, private, and offline-capable agent experience.
 
 ## Tech Stack
 
@@ -26,7 +26,7 @@ Located at `student_management/packages/gemma-agent/`, it is a standalone packag
 ## Project Structure
 
 ```
-student_management/packages/gemma-agent/
+simgemma/
 ├── src/
 │   ├── main.tsx                          # Entry point, Buffer polyfill
 │   ├── App.tsx                           # Main React app: model loading, chat, generation
@@ -148,22 +148,16 @@ mcp connect [name]          # Connect to server(s) and cache tools
 
 ### Storage
 - Config stored in `localStorage` under key `agent-config`
-- Virtual filesystem persisted in IndexedDB via LightningFS
+- Virtual filesystem persisted in IndexedDB via LightningFS (indexed as `simgemma-fs`)
 
 ## Development Commands
 
-Run from `student_management/packages/gemma-agent/`:
 ```bash
+npm install          # Install dependencies
 npm run dev          # Start Vite dev server (default port 5173)
 npm run build        # Production build to dist/
 npm run lint         # Run ESLint checks
 npm run preview      # Preview production build
-```
-
-To run as part of the main student management app:
-```bash
-# From student_management/
-npm run dev:agent    # Start gemma-agent dev server alongside main app
 ```
 
 ## Environment Requirements

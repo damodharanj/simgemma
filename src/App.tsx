@@ -198,7 +198,7 @@ export default function App() {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `gemma-agent-fs-${new Date().toISOString().slice(0, 10)}.json`;
+        a.download = `simgemma-fs-${new Date().toISOString().slice(0, 10)}.json`;
         a.click();
         URL.revokeObjectURL(url);
       }
@@ -220,7 +220,22 @@ export default function App() {
       try {
         const text = await file.text();
         const bash = BashSystem.getInstance();
-        const result = await bash.execute(`echo '${text.replace(/'/g, "'\\''")}' | fs-import`);
+        const tempPath = `/tmp/import-${Date.now()}.json`;
+        
+        // Ensure /tmp exists
+        if (!(await bash.fs.exists('/tmp'))) {
+          await bash.fs.mkdir('/tmp', { recursive: true });
+        }
+        
+        // Write the file to virtual FS
+        await bash.fs.writeFile(tempPath, text);
+        
+        // Run fs-import on the file
+        const result = await bash.execute(`fs-import ${tempPath}`);
+        
+        // Cleanup
+        await bash.fs.rm(tempPath).catch(() => {});
+        
         if (result.exitCode === 0) {
           window.dispatchEvent(new CustomEvent('filesystem-changed'));
           alert(result.stdout || 'Import completed successfully');
@@ -361,29 +376,14 @@ export default function App() {
 
   const clearImage = () => setSelectedImage(null);
 
-  const syncArtifactToSelectedApp = async () => {
-    if (!selectedApp) return;
+  const syncArtifactToSelectedApp = async (content?: string) => {
+    const contentToWrite = content || htmlArtifact;
+    if (!selectedApp || !contentToWrite) return;
     try {
       const bash = BashSystem.getInstance();
-      const appsDir = '/home/user/apps';
-      const result = await bash.execute(`ls ${appsDir}/`);
-      if (result.exitCode !== 0 || !result.stdout.trim()) return;
-      
-      const appFolders = result.stdout.trim().split('\n').filter(Boolean);
-      
-      for (const folder of appFolders) {
-        if (folder === selectedApp || folder === 'sessions') continue;
-        
-        const indexPath = `${appsDir}/${folder}/index.html`;
-        const exists = await bash.fs.exists(indexPath);
-        if (exists) {
-          const html = await bash.fs.readFile(indexPath, 'utf-8');
-          await bash.fs.writeFile(`${appsDir}/${selectedApp}/index.html`, html);
-        }
-      }
-      
-      await loadArtifactFromFs(selectedApp);
-    } catch {
+      await bash.fs.writeFile(`/home/user/apps/${selectedApp}/index.html`, contentToWrite);
+    } catch (e) {
+      console.error('Failed to sync artifact:', e);
     }
   };
 
@@ -652,8 +652,11 @@ export default function App() {
         const htmlArtifactContent = AgentTools.parseHtmlArtifact(assistantResponse);
         if (htmlArtifactContent) {
           setHtmlArtifact(htmlArtifactContent);
+          await syncArtifactToSelectedApp(htmlArtifactContent);
+        } else if (selectedApp) {
+          // If no artifact in response but we have an app selected, reload from filesystem
+          await loadArtifactFromFs(selectedApp);
         }
-        await syncArtifactToSelectedApp();
         setStatus('ready');
         if (requestId) {
           window.dispatchEvent(new CustomEvent(`agent-done-${requestId}`));
@@ -774,8 +777,11 @@ export default function App() {
         const htmlArtifactContent = AgentTools.parseHtmlArtifact(assistantResponse);
         if (htmlArtifactContent) {
           setHtmlArtifact(htmlArtifactContent);
+          await syncArtifactToSelectedApp(htmlArtifactContent);
+        } else if (selectedApp) {
+          // If no artifact in response but we have an app selected, reload from filesystem
+          await loadArtifactFromFs(selectedApp);
         }
-        await syncArtifactToSelectedApp();
         setStatus('ready');
         if (requestId) {
           window.dispatchEvent(new CustomEvent(`agent-done-${requestId}`));
@@ -969,7 +975,7 @@ export default function App() {
         if (htmlArtifactContent) {
           setHtmlArtifact(htmlArtifactContent);
         }
-        await syncArtifactToSelectedApp();
+        await syncArtifactToSelectedApp(htmlArtifactContent);
         setStatus('ready');
         if (requestId) {
           window.dispatchEvent(new CustomEvent(`agent-done-${requestId}`));
@@ -1123,8 +1129,12 @@ export default function App() {
         const htmlArtifactContent = AgentTools.parseHtmlArtifact(assistantResponse);
         if (htmlArtifactContent) {
           setHtmlArtifact(htmlArtifactContent);
+          await syncArtifactToSelectedApp(htmlArtifactContent);
+        } else if (selectedApp) {
+          // If no artifact in response but we have an app selected, reload from filesystem
+          // (changes might have been made via bash commands)
+          await loadArtifactFromFs(selectedApp);
         }
-        await syncArtifactToSelectedApp();
         setStatus('ready');
         if (requestId) {
           window.dispatchEvent(new CustomEvent(`agent-done-${requestId}`));
@@ -1208,7 +1218,7 @@ export default function App() {
               <Bot className="h-5 w-5 text-primary" />
             </div>
             <div>
-              <h1 className="text-sm font-semibold">Gemma 4 Agent</h1>
+              <h1 className="text-sm font-semibold">SimGemma</h1>
               <div className="flex items-center gap-1.5">
                 <div className={`h-2 w-2 rounded-full ${getStatusColor()}`} />
                 <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
