@@ -7,6 +7,7 @@ import {
   TextStreamer,
   env 
 } from '@huggingface/transformers'
+import { useNavigate, useParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -91,6 +92,8 @@ interface Session {
 }
 
 export default function App() {
+  const { appName: urlAppName } = useParams();
+  const navigate = useNavigate();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [status, setStatus] = useState<'idle' | 'loading' | 'ready' | 'generating' | 'error'>('idle');
@@ -107,7 +110,7 @@ export default function App() {
   const [htmlArtifact, setHtmlArtifact] = useState<string | null>(null);
   
   const [apps, setApps] = useState<string[]>([]);
-  const [selectedApp, setSelectedApp] = useState<string | null>(null);
+  const [selectedApp, setSelectedApp] = useState<string | null>(urlAppName || null);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [currentSession, setCurrentSession] = useState<Session | null>(null);
   const [showAppSelector, setShowAppSelector] = useState(false);
@@ -121,6 +124,12 @@ export default function App() {
   const processorRef = useRef<any>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const configRef = useRef(loadConfig());
+
+  useEffect(() => {
+    if (urlAppName !== selectedApp) {
+      setSelectedApp(urlAppName || null);
+    }
+  }, [urlAppName]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -269,6 +278,7 @@ export default function App() {
   };
 
   const selectApp = async (appName: string) => {
+    navigate(`/${appName}`);
     setSelectedApp(appName);
     setShowAppSelector(false);
     await loadArtifactFromFs(appName);
@@ -316,6 +326,7 @@ export default function App() {
       await bash.execute(`rm -rf /home/user/apps/${appName}`);
       
       if (selectedApp === appName) {
+        navigate('/');
         setSelectedApp(null);
         setHtmlArtifact(null);
       }
