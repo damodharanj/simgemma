@@ -72,6 +72,17 @@ export const Terminal: React.FC<TerminalProps> = ({ onClose }) => {
   const [cwd, setCwd] = useState('/home/user');
   const [isMaximized, setIsMaximized] = useState(false);
   const [isSearchMode, setIsSearchMode] = useState(false);
+  
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  const stateRef = useRef({ cwd, isSearchMode });
+  useEffect(() => {
+    stateRef.current = { cwd, isSearchMode };
+  }, [cwd, isSearchMode]);
+
   const [position, setPosition] = useState({ x: window.innerWidth - 936, y: window.innerHeight - 536 });
   const isDragging = useRef(false);
   const dragOffset = useRef({ x: 0, y: 0 });
@@ -85,11 +96,11 @@ export const Terminal: React.FC<TerminalProps> = ({ onClose }) => {
   const searchResultIndex = useRef(-1);
   const savedInput = useRef('');
 
-  const getPrompt = useCallback(() => `\x1b[1;34m${cwd}\x1b[0m $ `, [cwd]);
+  const getPrompt = useCallback(() => `\x1b[1;34m${stateRef.current.cwd}\x1b[0m $ `, []);
 
   const writePrompt = useCallback(() => {
-    xtermRef.current?.write(isSearchMode ? `\x1b[1;33m(reverse-i-search)\`${getPrompt()}` : getPrompt());
-  }, [getPrompt, isSearchMode]);
+    xtermRef.current?.write(stateRef.current.isSearchMode ? `\x1b[1;33m(reverse-i-search)\`${getPrompt()}` : getPrompt());
+  }, [getPrompt]);
 
   const clearLine = useCallback(() => {
     const term = xtermRef.current;
@@ -100,7 +111,7 @@ export const Terminal: React.FC<TerminalProps> = ({ onClose }) => {
   const redrawInput = useCallback(() => {
     const term = xtermRef.current;
     if (!term) return;
-    if (isSearchMode) {
+    if (stateRef.current.isSearchMode) {
       term.write(`\r\x1b[1;33m(reverse-i-search)\`${searchQuery.current}: `);
       if (searchResults.current.length > 0) {
         const idx = searchResults.current[searchResultIndex.current];
@@ -110,7 +121,7 @@ export const Terminal: React.FC<TerminalProps> = ({ onClose }) => {
     } else {
       term.write('\r' + getPrompt() + currentInput.current.replace(/\n/g, '\r\n'));
     }
-  }, [getPrompt, isSearchMode]);
+  }, [getPrompt]);
 
   const searchHistory = useCallback((query: string) => {
     if (!query) {
@@ -135,6 +146,84 @@ export const Terminal: React.FC<TerminalProps> = ({ onClose }) => {
     }
     historyIndex.current = history.current.length;
   }, []);
+
+  const awaitExecute = useCallback(async (input: string) => {
+    const cmd = input.trim();
+    const term = xtermRef.current;
+    if (!term) return;
+
+    if (!cmd) {
+      term.write(getPrompt());
+      return;
+    }
+
+    if (cmd === 'clear' || cmd === 'cls') {
+      term.clear();
+      term.write(getPrompt());
+      return;
+    }
+
+    if (cmd === 'history') {
+      const list = history.current.map((c, i) => `\x1b[36m${i + 1}\x1b[0m  ${c}`).join('\r\n');
+      if (list) term.writeln(list);
+      term.write(getPrompt());
+      return;
+    }
+
+    if (cmd.startsWith('!')) {
+      const num = parseInt(cmd.slice(1));
+      if (!isNaN(num) && num > 0 && num <= history.current.length) {
+        const newCmd = history.current[num - 1];
+        term.writeln(`\x1b[33m${newCmd}\x1b[0m`);
+        awaitExecute(newCmd);
+        return;
+      }
+      term.writeln('\x1b[31mbash: !: event not found\x1b[0m');
+      term.write(getPrompt());
+      return;
+    }
+
+    if (cmd === 'help') {
+      term.writeln('\x1b[1;32mAvailable commands:\x1b[0m');
+      term.writeln('  \x1b[33mclear\x1b[0m        - Clear terminal screen');
+      term.writeln('  \x1b[33mhistory\x1b[0m     - Show command history');
+      term.writeln('  \x1b[33m!<n>\x1b[0m        - Execute command <n> from history');
+      term.writeln('  \x1b[1;31mCtrl+R\x1b[0m     - Reverse search history');
+      term.writeln('  \x1b[1;31mUp/Down\x1b[0m     - Navigate history');
+      term.writeln('  \x1b[1;31mCtrl+C\x1b[0m     - Interrupt command');
+      term.writeln('  \x1b[1;31mCtrl+D\x1b[0m     - Exit terminal');
+      term.writeln('  \x1b[1;31mCtrl+L\x1b[0m     - Clear screen');
+      term.writeln('  \x1b[1;31mCtrl+A/E\x1b[0m    - Line beginning/end');
+      term.writeln('  \x1b[1;31mCtrl+U/K\x1b[0m    - Clear line');
+      term.writeln('  \x1b[1;31mTab\x1b[0m       - Command completion');
+      term.write(getPrompt());
+      return;
+    }
+
+    try {
+      const result = await bashSystem.execute(cmd);
+      
+      if (result.stdout) {
+        term.write(result.stdout.replace(/\n/g, '\r\n'));
+      }
+      if (result.stderr) {
+        term.write('\x1b[31m' + result.stderr.replace(/\n/g, '\r\n') + '\x1b[0m');
+      }
+
+      const newCwd = bashSystem.getCwd();
+      setCwd(newCwd);
+      stateRef.current.cwd = newCwd;
+
+      const fsModifyingCommands = /^(mkdir|rmdir|rm|cp|mv|touch|cat\s+.*>\s*|echo\s+.*>\s*|tee|chmod|chown)/;
+      if (fsModifyingCommands.test(cmd.trim())) {
+        window.dispatchEvent(new CustomEvent('filesystem-changed'));
+      }
+    } catch (err: any) {
+      term.write('\x1b[31mError: ' + err.message + '\x1b[0m\r\n');
+    }
+
+    term.write(getPrompt());
+  }, [getPrompt, bashSystem]);
 
   useEffect(() => {
     if (!terminalRef.current) return;
@@ -183,6 +272,7 @@ export const Terminal: React.FC<TerminalProps> = ({ onClose }) => {
     
     term.open(terminalRef.current);
     fitAddon.fit();
+    term.focus();
     
     xtermRef.current = term;
     fitAddonRef.current = fitAddon;
@@ -201,7 +291,7 @@ export const Terminal: React.FC<TerminalProps> = ({ onClose }) => {
       const code = data.charCodeAt(0);
 
       if (data === '\x1b[A') { // Arrow Up
-        if (isSearchMode) {
+        if (stateRef.current.isSearchMode) {
           if (searchResultIndex.current < searchResults.current.length - 1) {
             searchResultIndex.current++;
             redrawInput();
@@ -216,7 +306,7 @@ export const Terminal: React.FC<TerminalProps> = ({ onClose }) => {
       }
 
       if (data === '\x1b[B') { // Arrow Down
-        if (isSearchMode) {
+        if (stateRef.current.isSearchMode) {
           if (searchResultIndex.current > 0) {
             searchResultIndex.current--;
             redrawInput();
@@ -263,8 +353,9 @@ export const Terminal: React.FC<TerminalProps> = ({ onClose }) => {
       }
 
       if (data === '\x12') { // Ctrl+R
-        if (isSearchMode) {
+        if (stateRef.current.isSearchMode) {
           setIsSearchMode(false);
+          stateRef.current.isSearchMode = false;
           searchQuery.current = '';
           searchResults.current = [];
           term.write('\r\n');
@@ -274,6 +365,7 @@ export const Terminal: React.FC<TerminalProps> = ({ onClose }) => {
           savedInput.current = currentInput.current;
           searchQuery.current = '';
           setIsSearchMode(true);
+          stateRef.current.isSearchMode = true;
           searchResults.current = [];
           searchResultIndex.current = -1;
           clearLine();
@@ -298,7 +390,7 @@ export const Terminal: React.FC<TerminalProps> = ({ onClose }) => {
       if (data === '\x04') { // Ctrl+D (EOF/exit)
         if (currentInput.current.length === 0) {
           term.writeln('\r\n\x1b[1;31mexit\x1b[0m');
-          onClose();
+          onCloseRef.current();
           return;
         }
         return;
@@ -340,7 +432,7 @@ export const Terminal: React.FC<TerminalProps> = ({ onClose }) => {
           
           let matches: string[] = [];
           if (needsFile && (lastWord.length > 0 || cmd === 'ls' || cmd === 'cd')) {
-            matches = await getFileCompletions(lastWord, cwd);
+            matches = await getFileCompletions(lastWord, stateRef.current.cwd);
             if (matches.length === 1) {
               const newInput = input.slice(0, input.length - lastWord.length) + matches[0];
               currentInput.current = newInput;
@@ -412,7 +504,7 @@ export const Terminal: React.FC<TerminalProps> = ({ onClose }) => {
         const cmd = currentInput.current;
         term.write('\r\n');
 
-        if (isSearchMode && searchResults.current.length > 0) {
+        if (stateRef.current.isSearchMode && searchResults.current.length > 0) {
           const idx = searchResults.current[searchResultIndex.current];
           currentInput.current = history.current[idx];
         }
@@ -421,17 +513,17 @@ export const Terminal: React.FC<TerminalProps> = ({ onClose }) => {
           addToHistory(cmd);
         }
 
-        awaitExecute(cmd);
+        await awaitExecute(cmd);
         
         setIsSearchMode(false);
+        stateRef.current.isSearchMode = false;
         searchQuery.current = '';
         currentInput.current = '';
         historyIndex.current = history.current.length;
-        writePrompt();
         return;
       }
 
-      if (isSearchMode) {
+      if (stateRef.current.isSearchMode) {
         searchQuery.current += data;
         clearLine();
         term.write('\x1b[1;33m(reverse-i-search)`\x1b[0m' + searchQuery.current + '\x1b[0m: ');
@@ -469,7 +561,7 @@ export const Terminal: React.FC<TerminalProps> = ({ onClose }) => {
       window.removeEventListener('resize', handleResize);
       window.removeEventListener('terminal-write', handleTerminalWrite);
     };
-  }, [addToHistory, clearLine, getPrompt, onClose, redrawInput, searchHistory, writePrompt]);
+  }, []); // Only once
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     if ((e.target as HTMLElement).closest('button')) return;
@@ -502,82 +594,6 @@ export const Terminal: React.FC<TerminalProps> = ({ onClose }) => {
       window.removeEventListener('mouseup', handleMouseUp);
     };
   }, [handleMouseMove, handleMouseUp]);
-
-  const awaitExecute = async (input: string) => {
-    const cmd = input.trim();
-    const term = xtermRef.current;
-    if (!term) return;
-
-    if (!cmd) {
-      term.write(getPrompt());
-      return;
-    }
-
-    if (cmd === 'clear' || cmd === 'cls') {
-      term.clear();
-      term.write(getPrompt());
-      return;
-    }
-
-    if (cmd === 'history') {
-      const list = history.current.map((c, i) => `\x1b[36m${i + 1}\x1b[0m  ${c}`).join('\r\n');
-      if (list) term.writeln(list);
-      term.write(getPrompt());
-      return;
-    }
-
-    if (cmd.startsWith('!')) {
-      const num = parseInt(cmd.slice(1));
-      if (!isNaN(num) && num > 0 && num <= history.current.length) {
-        const newCmd = history.current[num - 1];
-        term.writeln(`\x1b[33m${newCmd}\x1b[0m`);
-        awaitExecute(newCmd);
-        return;
-      }
-      term.writeln('\x1b[31mbash: !: event not found\x1b[0m');
-      term.write(getPrompt());
-      return;
-    }
-
-    if (cmd === 'help') {
-      term.writeln('\x1b[1;32mAvailable commands:\x1b[0m');
-      term.writeln('  \x1b[33mclear\x1b[0m        - Clear terminal screen');
-      term.writeln('  \x1b[33mhistory\x1b[0m     - Show command history');
-      term.writeln('  \x1b[33m!<n>\x1b[0m        - Execute command <n> from history');
-      term.writeln('  \x1b[1;31mCtrl+R\x1b[0m     - Reverse search history');
-      term.writeln('  \x1b[1;31mUp/Down\x1b[0m     - Navigate history');
-      term.writeln('  \x1b[1;31mCtrl+C\x1b[0m     - Interrupt command');
-      term.writeln('  \x1b[1;31mCtrl+D\x1b[0m     - Exit terminal');
-      term.writeln('  \x1b[1;31mCtrl+L\x1b[0m     - Clear screen');
-      term.writeln('  \x1b[1;31mCtrl+A/E\x1b[0m    - Line beginning/end');
-      term.writeln('  \x1b[1;31mCtrl+U/K\x1b[0m    - Clear line');
-      term.writeln('  \x1b[1;31mTab\x1b[0m       - Command completion');
-      term.write(getPrompt());
-      return;
-    }
-
-    try {
-      const result = await bashSystem.execute(cmd);
-      
-      if (result.stdout) {
-        term.write(result.stdout.replace(/\n/g, '\r\n'));
-      }
-      if (result.stderr) {
-        term.write('\x1b[31m' + result.stderr.replace(/\n/g, '\r\n') + '\x1b[0m');
-      }
-
-      setCwd(bashSystem.getCwd());
-
-      const fsModifyingCommands = /^(mkdir|rmdir|rm|cp|mv|touch|cat\s+.*>\s*|echo\s+.*>\s*|tee|chmod|chown)/;
-      if (fsModifyingCommands.test(cmd.trim())) {
-        window.dispatchEvent(new CustomEvent('filesystem-changed'));
-      }
-    } catch (err: any) {
-      term.write('\x1b[31mError: ' + err.message + '\x1b[0m\r\n');
-    }
-
-    term.write(getPrompt());
-  };
 
   return (
     <div

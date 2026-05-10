@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
-import { Send, Image as ImageIcon, Loader2, User, Bot, X, Terminal as TerminalIcon, Settings, RotateCcw, AlertCircle, Layout, Eye, FolderPlus, FolderOpen, Plus, MessageSquare, Trash2, Download, Upload } from 'lucide-react'
+import { Send, Image as ImageIcon, Loader2, User, Bot, X, Terminal as TerminalIcon, Settings, RotateCcw, AlertCircle, Layout, Eye, FolderPlus, FolderOpen, Plus, MessageSquare, Trash2, Download, Upload, Code2, ChevronDown, ChevronRight } from 'lucide-react'
 import { 
   AutoProcessor, 
   Gemma4ForConditionalGeneration, 
@@ -106,7 +106,6 @@ export default function App() {
   const [showTerminal, setShowTerminal] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
-  const [showToolCalls, setShowToolCalls] = useState(false);
   const [htmlArtifact, setHtmlArtifact] = useState<string | null>(null);
   
   const [apps, setApps] = useState<string[]>([]);
@@ -1260,15 +1259,6 @@ export default function App() {
             <Button
               variant="ghost"
               size="icon"
-              className={`h-8 w-8 rounded-lg ${showToolCalls ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:text-foreground'}`}
-              onClick={() => setShowToolCalls(!showToolCalls)}
-              title="Toggle Tool Calls"
-            >
-              <TerminalIcon className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
               className={`h-8 w-8 rounded-lg ${showTerminal ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:text-foreground'}`}
               onClick={() => setShowTerminal(!showTerminal)}
               title="Toggle Terminal"
@@ -1494,7 +1484,18 @@ export default function App() {
                   const isSystem = msg.role === 'system';
                   const isTool = msg.role === 'tool';
                   
-                  if (isTool && !showToolCalls) return null;
+                  if (isTool) return null;
+                  
+                  const contentText = typeof msg.content === 'string' 
+                    ? msg.content 
+                    : (Array.isArray(msg.content) ? msg.content.find((c: any) => (c as any).type === 'text')?.text || '' : '');
+                  
+                  const hasVisibleContent = contentText.trim().length > 0 
+                    || !!msg.previewUrl 
+                    || !!msg.thinking 
+                    || !!msg.tool_calls;
+                  
+                  if (!hasVisibleContent) return null;
                   
                   return (
                     <div 
@@ -1512,7 +1513,7 @@ export default function App() {
                       }`}>
                         {isUser ? <User className="h-4 w-4" /> : 
                          isSystem ? <AlertCircle className="h-4 w-4" /> :
-                         isTool ? <TerminalIcon className="h-4 w-4" /> :
+                         isTool ? <Code2 className="h-4 w-4" /> :
                          <Bot className="h-4 w-4" />}
                       </div>
                       
@@ -1545,7 +1546,45 @@ export default function App() {
                             ) : typeof msg.content === 'string' ? (
                               renderMessageContent(msg.content)
                             ) : (
-                              msg.content.find((c: any) => c.type === 'text')?.text || ''
+                              (msg.content as any[]).find((c: any) => c.type === 'text')?.text || ''
+                            )}
+
+                            {msg.tool_calls && (
+                              <div className="mt-2 border-t border-border/10 pt-2 w-full overflow-hidden">
+                                <details className="group">
+                                  <summary className="flex items-center gap-1.5 text-[10px] font-medium text-muted-foreground hover:text-foreground cursor-pointer list-none transition-colors select-none">
+                                    <ChevronRight className="h-2.5 w-2.5 transition-transform group-open:rotate-90 shrink-0" />
+                                    <span>Thinking</span>
+                                  </summary>
+                                  <div className="mt-1.5 space-y-2 pl-4 border-l border-primary/20 w-full overflow-hidden">
+                                    {msg.tool_calls.map((tc, j) => {
+                                      // Find the result message for this specific tool call
+                                      const resultMsg = messages.find(m => m.role === 'tool' && m.tool_call_id === tc.id);
+                                      return (
+                                        <div key={j} className="flex flex-col gap-1 w-full overflow-hidden">
+                                          <div className="flex items-center gap-1.5 text-[10px] font-mono text-foreground/70">
+                                            <Code2 className="h-3 w-3 shrink-0" />
+                                            <span className="font-semibold truncate">{tc.function.name}</span>
+                                          </div>
+                                          {tc.function.arguments && (
+                                            <pre className="text-[9px] font-mono bg-muted/50 p-2 rounded-md overflow-x-auto text-foreground/80 leading-tight whitespace-pre-wrap break-all">
+                                              {tc.function.arguments}
+                                            </pre>
+                                          )}
+                                          {resultMsg && (
+                                            <div className="flex flex-col gap-1 mt-0.5 w-full overflow-hidden">
+                                              <div className="text-[9px] font-mono text-muted-foreground font-bold uppercase tracking-wider">Output</div>
+                                              <pre className="text-[9px] font-mono bg-muted/30 p-2 rounded-md overflow-x-auto text-foreground leading-normal border-l-2 border-emerald-500/50 max-h-40 whitespace-pre-wrap break-all shadow-sm">
+                                                {typeof resultMsg.content === 'string' ? resultMsg.content : JSON.stringify(resultMsg.content, null, 2)}
+                                              </pre>
+                                            </div>
+                                          )}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </details>
+                              </div>
                             )}
                           </div>
                         </div>
