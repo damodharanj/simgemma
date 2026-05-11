@@ -135,7 +135,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                 <Input
                   value={config.openai.modelId}
                   onChange={(e) => setConfig(prev => ({ ...prev, openai: { ...prev.openai, modelId: e.target.value } }))}
-                  placeholder="gemma-4-e2b-it"
+                  placeholder="google/gemma-4-26b-a4b-it"
                 />
               </div>
             </div>

@@ -20,7 +20,7 @@ export const DEFAULT_CONFIG: AgentConfig = {
   openai: {
     baseUrl: 'https://openrouter.ai/api/v1',
     apiKey: '',
-    modelId: 'google/gemma-4-1b-it',
+    modelId: 'google/gemma-4-26b-a4b-it',
   },
 };
 

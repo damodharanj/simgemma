@@ -123,6 +123,21 @@ export default function App() {
   const processorRef = useRef<any>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const configRef = useRef(loadConfig());
+  const prevAppsRef = useRef<string[]>([]);
+  const messagesRef = useRef<Message[]>([]);
+  const selectedAppRef = useRef<string | null>(selectedApp);
+
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
+
+  useEffect(() => {
+    prevAppsRef.current = apps;
+  }, [apps]);
+
+  useEffect(() => {
+    selectedAppRef.current = selectedApp;
+  }, [selectedApp]);
 
   useEffect(() => {
     if (urlAppName !== selectedApp) {
@@ -163,14 +178,44 @@ export default function App() {
 
   useEffect(() => {
     const handleFsChange = async () => {
-      await loadApps();
-      if (selectedApp) {
-        await loadArtifactFromFs(selectedApp);
+      const currentAppList = await loadApps();
+      const prevAppList = prevAppsRef.current;
+      const addedApps = currentAppList.filter(a => !prevAppList.includes(a));
+      const currentSelectedApp = selectedAppRef.current;
+      
+      // Auto-switch logic: if new apps added and no app currently selected
+      if (addedApps.length > 0 && !currentSelectedApp) {
+        const newApp = addedApps[0];
+        const msgs = messagesRef.current;
+        const bash = BashSystem.getInstance();
+        
+        if (msgs.length > 0) {
+          const sessionId = `session-${Date.now()}`;
+          const sessionName = `Initial Chat`;
+          const newSession: Session = {
+            id: sessionId,
+            name: sessionName,
+            createdAt: new Date().toISOString(),
+          };
+          
+          try {
+            await bash.execute(`mkdir -p /home/user/apps/${newApp}/sessions`);
+            await bash.fs.writeFile(`/home/user/apps/${newApp}/sessions/index.json`, JSON.stringify([newSession]));
+            await bash.fs.writeFile(`/home/user/apps/${newApp}/sessions/${sessionId}.json`, JSON.stringify(msgs));
+          } catch (e) {
+            console.error('Failed to migrate session:', e);
+          }
+        }
+        
+        await selectApp(newApp);
+      } else if (currentSelectedApp) {
+        // If an app is already selected, ensure we reload the artifact in case it was updated
+        await loadArtifactFromFs(currentSelectedApp);
       }
     };
     window.addEventListener('filesystem-changed', handleFsChange);
     return () => window.removeEventListener('filesystem-changed', handleFsChange);
-  }, [selectedApp]);
+  }, []); // Empty dependency array, uses Refs for current state
 
   useEffect(() => {
     const handleConfigChange = () => {
@@ -267,12 +312,15 @@ export default function App() {
       if (result.exitCode === 0 && result.stdout.trim()) {
         const appList = result.stdout.trim().split('\n').filter(Boolean);
         setApps(appList);
+        return appList;
       } else {
         setApps([]);
+        return [];
       }
     } catch (e) {
       console.error('Failed to load apps:', e);
       setApps([]);
+      return [];
     }
   };
 
