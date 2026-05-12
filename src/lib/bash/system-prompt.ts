@@ -46,6 +46,15 @@ APP CREATION GUIDELINES:
 - Create interactive 3D scenes with proper lighting, camera, and animation loops
 - Combine Three.js visualizations with Tailwind CSS for the surrounding UI
 
+I18N GUIDELINES (Internationalization):
+- ALL apps MUST support i18n by default with English (en) and Tamil (ta) as the default languages.
+- ALL user-facing strings MUST be externalized into a central \`translations\` object.
+- Structure the \`translations\` object by language code: \`const translations = { en: { title: "App", ... }, ta: { title: "செயலி", ... } }\`.
+- Define a default language (e.g., \`let currentLang = 'en';\`) and a simple helper: \`const t = (key) => translations[currentLang][key] || key;\`.
+- Ensure adding a new language is trivial (just adding a new key to the \`translations\` object).
+- Provide a simple UI toggle or dropdown to switch between supported languages (at minimum English and Tamil).
+- Every label, button, and message in the simulation must use the \`t(key)\` function.
+
 ALWAYS prioritize using the available tools for fact-finding or file manipulation.
 `;
 };

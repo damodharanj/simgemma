@@ -156,8 +156,14 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    loadApps();
-  }, []);
+    const init = async () => {
+      const appList = await loadApps();
+      if (!urlAppName && appList.length > 0) {
+        await selectApp(appList[0]);
+      }
+    };
+    init();
+  }, [urlAppName]);
 
   useEffect(() => {
     if (selectedApp) {
