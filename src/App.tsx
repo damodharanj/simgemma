@@ -488,16 +488,16 @@ export default function App() {
         if (sessionsList.length > 0) {
           selectSession(appName, sessionsList[0]);
         } else {
-          createNewSession(appName);
+          createNewSession(appName, []);
         }
       } else {
         setSessions([]);
-        createNewSession(appName);
+        createNewSession(appName, []);
       }
     } catch (e) {
       console.error('Failed to load sessions:', e);
       setSessions([]);
-      createNewSession(appName);
+      createNewSession(appName, []);
     }
   };
 
@@ -520,16 +520,17 @@ export default function App() {
     }
   };
 
-  const createNewSession = async (appName: string) => {
+  const createNewSession = async (appName: string, initialSessions?: Session[]) => {
+    const baseSessions = initialSessions !== undefined ? initialSessions : sessions;
     const sessionId = `session-${Date.now()}`;
-    const sessionName = `Chat ${sessions.length + 1}`;
+    const sessionName = `Chat ${baseSessions.length + 1}`;
     const newSession: Session = {
       id: sessionId,
       name: sessionName,
       createdAt: new Date().toISOString(),
     };
     
-    const updatedSessions = [...sessions, newSession];
+    const updatedSessions = [...baseSessions, newSession];
     setSessions(updatedSessions);
     setCurrentSession(newSession);
     setMessages([]);
@@ -559,7 +560,7 @@ export default function App() {
         if (updatedSessions.length > 0) {
           selectSession(appName, updatedSessions[0]);
         } else {
-          createNewSession(appName);
+          createNewSession(appName, []);
         }
       }
     } catch (e) {
