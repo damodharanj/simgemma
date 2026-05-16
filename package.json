@@ -3,6 +3,8 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "license": "MIT",
+  "author": "Damodharan J",
   "main": "./src/index.ts",
   "scripts": {
     "dev": "vite",
