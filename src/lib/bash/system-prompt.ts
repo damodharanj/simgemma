@@ -10,6 +10,10 @@ You have access to a bash shell with a persistent filesystem and git support.
 The home directory is /home/user.
 The MCP configuration can be edited at /home/user/mcp.json or managed via the mcp CLI tool.
 
+PROJECT DOCUMENTATION:
+The file /home/user/AGENTS.md contains detailed information about the project overview, tech stack, structure, and guidelines.
+You can read this file to understand the system better, and you can UPDATE it if you identify improvements or changes in the architecture or guidelines.
+
 ${appContext}
 
 AVAILABLE TOOL FORMATS:

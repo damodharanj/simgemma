@@ -72,6 +72,7 @@ export const Terminal: React.FC<TerminalProps> = ({ onClose }) => {
   const [cwd, setCwd] = useState('/home/user');
   const [isMaximized, setIsMaximized] = useState(false);
   const [isSearchMode, setIsSearchMode] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   
   const onCloseRef = useRef(onClose);
   useEffect(() => {
@@ -83,9 +84,16 @@ export const Terminal: React.FC<TerminalProps> = ({ onClose }) => {
     stateRef.current = { cwd, isSearchMode };
   }, [cwd, isSearchMode]);
 
-  const [position, setPosition] = useState({ x: window.innerWidth - 936, y: window.innerHeight - 536 });
-  const isDragging = useRef(false);
-  const dragOffset = useRef({ x: 0, y: 0 });
+  const [position, setPosition] = useState(() => {
+    const width = 900;
+    const height = 500;
+    return {
+      x: Math.max(20, window.innerWidth - width - 40),
+      y: Math.max(20, window.innerHeight - height - 40)
+    };
+  });
+  
+  const dragRef = useRef({ isDragging: false, offset: { x: 0, y: 0 } });
   const bashSystem = BashSystem.getInstance();
 
   const currentInput = useRef('');
@@ -566,24 +574,38 @@ export const Terminal: React.FC<TerminalProps> = ({ onClose }) => {
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     if ((e.target as HTMLElement).closest('button')) return;
     if ((e.target as HTMLElement).closest('.xterm')) return;
-    isDragging.current = true;
+    
+    dragRef.current.isDragging = true;
+    setIsDragging(true);
+    
     const rect = e.currentTarget.getBoundingClientRect();
-    dragOffset.current = {
+    dragRef.current.offset = {
       x: e.clientX - rect.left,
       y: e.clientY - rect.top,
     };
   }, []);
 
   const handleMouseMove = useCallback((e: MouseEvent) => {
-    if (!isDragging.current) return;
+    if (!dragRef.current.isDragging) return;
+    
+    const x = e.clientX - dragRef.current.offset.x;
+    const y = e.clientY - dragRef.current.offset.y;
+    
+    // Boundary checks
+    const width = 900;
+    const height = 500;
+    const maxX = window.innerWidth - 20;
+    const maxY = window.innerHeight - 20;
+    
     setPosition({
-      x: e.clientX - dragOffset.current.x,
-      y: e.clientY - dragOffset.current.y,
+      x: Math.max(-width + 50, Math.min(x, maxX - 50)),
+      y: Math.max(0, Math.min(y, maxY - 30)),
     });
   }, []);
 
   const handleMouseUp = useCallback(() => {
-    isDragging.current = false;
+    dragRef.current.isDragging = false;
+    setIsDragging(false);
   }, []);
 
   useEffect(() => {
@@ -597,18 +619,24 @@ export const Terminal: React.FC<TerminalProps> = ({ onClose }) => {
 
   return (
     <div
-      className={`fixed z-50 transition-all duration-300 ${
-        isMaximized ? 'inset-0' : 'w-[900px] h-[500px]'
+      className={`fixed z-50 ${
+        isMaximized 
+          ? 'inset-0 transition-all duration-300' 
+          : `w-[900px] h-[500px] ${isDragging ? '' : 'transition-all duration-300'}`
       }`}
       style={isMaximized ? {} : { left: `${position.x}px`, top: `${position.y}px` }}
     >
       <div className="flex flex-col h-full bg-[#0d1117] rounded-xl border border-[#30363d] shadow-2xl overflow-hidden">
         <div
-          className="flex items-center justify-between px-4 py-3 bg-[#161b22] border-b border-[#30363d] cursor-move"
+          className="flex items-center justify-between px-4 py-3 bg-[#161b22] border-b border-[#30363d] cursor-move select-none"
           onMouseDown={handleMouseDown}
         >
           <div className="flex items-center gap-3">
             <div className="flex gap-2">
+              <button
+                onClick={onClose}
+                className="w-3 h-3 rounded-full bg-[#ff5f56] hover:bg-[#ff5f56]/80 transition-colors"
+              />
               <button
                 className="w-3 h-3 rounded-full bg-[#ffbd2e] hover:bg-[#ffbd2e]/80 transition-colors"
               />
@@ -642,3 +670,4 @@ export const Terminal: React.FC<TerminalProps> = ({ onClose }) => {
     </div>
   );
 };
+

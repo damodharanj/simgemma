@@ -42,6 +42,17 @@ export class BashSystem {
       if (!(await this.fs.exists('/home/user/apps'))) {
         await this.fs.mkdir('/home/user/apps', { recursive: true });
       }
+      if (!(await this.fs.exists('/home/user/AGENTS.md'))) {
+        try {
+          const response = await fetch('/AGENTS.md');
+          if (response.ok) {
+            const content = await response.text();
+            await this.fs.writeFile('/home/user/AGENTS.md', content);
+          }
+        } catch (e) {
+          console.error('Failed to fetch AGENTS.md', e);
+        }
+      }
 
       // Check if already initialized with default files
       if (!(await this.fs.exists('/.initialized'))) {

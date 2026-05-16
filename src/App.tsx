@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
-import { Send, Image as ImageIcon, Loader2, User, Bot, X, Terminal as TerminalIcon, Settings, RotateCcw, AlertCircle, Layout, Eye, FolderPlus, FolderOpen, Plus, MessageSquare, Trash2, Download, Upload, Code2, ChevronDown, ChevronRight } from 'lucide-react'
+import { Send, Image as ImageIcon, Loader2, User, Bot, X, Terminal as TerminalIcon, Settings, RotateCcw, AlertCircle, Layout, Eye, FolderPlus, FolderOpen, Plus, MessageSquare, Trash2, Download, Upload, Code2, ChevronDown, ChevronRight, FileText } from 'lucide-react'
 import { 
   AutoProcessor, 
   Gemma4ForConditionalGeneration, 
@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Terminal } from '@/components/Terminal'
 import { SettingsModal } from '@/components/SettingsModal'
+import { AgentsMdModal } from '@/components/AgentsMdModal'
 import { AgentTools } from '@/lib/bash/agent-tools'
 import { getSystemPrompt } from '@/lib/bash/system-prompt'
 import { McpClientManager } from '@/lib/bash/mcp-client'
@@ -105,6 +106,7 @@ export default function App() {
   
   const [showTerminal, setShowTerminal] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showAgentsMd, setShowAgentsMd] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [htmlArtifact, setHtmlArtifact] = useState<string | null>(null);
   
@@ -1332,6 +1334,15 @@ export default function App() {
             <Button
               variant="ghost"
               size="icon"
+              className={`h-8 w-8 rounded-lg ${showAgentsMd ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:text-foreground'}`}
+              onClick={() => setShowAgentsMd(!showAgentsMd)}
+              title="Edit AGENTS.md"
+            >
+              <FileText className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
               className="h-8 w-8 rounded-lg text-muted-foreground hover:text-foreground"
               onClick={handleExportFs}
               disabled={isExporting}
@@ -1828,6 +1839,7 @@ export default function App() {
 
       {showTerminal && <Terminal onClose={() => setShowTerminal(false)} />}
       {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
+      {showAgentsMd && <AgentsMdModal onClose={() => setShowAgentsMd(false)} />}
     </div>
   )
 }
